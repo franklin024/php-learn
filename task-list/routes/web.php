@@ -2,81 +2,69 @@
 
 use Illuminate\Support\Facades\Route;
 use Symfony\Component\HttpFoundation\Response;
+use Illuminate\Http\Request;
+use App\Models\Task;
+use App\Http\Requests\TaskRequest;
 
-class Task
-{
-  public function __construct(
-    public int $id,
-    public string $title,
-    public string $description,
-    public ?string $long_description,
-    public bool $completed,
-    public string $created_at,
-    public string $updated_at
-  ) {
-  }
-}
-
-$tasks = [
-  new Task(
-    1,
-    'Buy groceries',
-    'Task 1 description',
-    'Task 1 long description',
-    false,
-    '2023-03-01 12:00:00',
-    '2023-03-01 12:00:00'
-  ),
-  new Task(
-    2,
-    'Sell old stuff',
-    'Task 2 description',
-    null,
-    false,
-    '2023-03-02 12:00:00',
-    '2023-03-02 12:00:00'
-  ),
-  new Task(
-    3,
-    'Learn programming',
-    'Task 3 description',
-    'Task 3 long description',
-    true,
-    '2023-03-03 12:00:00',
-    '2023-03-03 12:00:00'
-  ),
-  new Task(
-    4,
-    'Take dogs for a walk',
-    'Task 4 description',
-    null,
-    false,
-    '2023-03-04 12:00:00',
-    '2023-03-04 12:00:00'
-  ),
-];
-
+//GET routes
 Route::get("/", function () {
     return redirect()->route("task.index");
 } );
 
-Route::get("/tasks", function () use ($tasks) {
+Route::get("/tasks", function () {
     return view("index", [
-        "tasks" => $tasks,
+        "tasks" => Task::latest()->paginate(10),
     ]);
 })->name("task.index");
 
-Route::get("/tasks/{id}", function ($id) use ($tasks) {
-    $task = collect($tasks)->firstWhere("id", $id);
+Route::view("/tasks/create", "create")
+    ->name("task.create");
 
-    if(!$task) {
-         abort(Response::HTTP_NOT_FOUND);
-    }
+Route::get("/tasks/{task}/edit", function (Task $task) {
+    return view("edit", ["task" => $task]);
+})->name("task.edit");
 
-    return view("show", ["task" => $task]);
+//hiển thị task
+Route::get("/tasks/{task}", function (Task $task) {
+    return view("show",
+        ["task" => $task]
+    );
 })->name("task.show");
 
 
+//tạo task
+Route::post("/tasks", function(TaskRequest $request) {
+    $task = Task::create($request->validated());
+
+    return redirect()->route("task.show", ["task" => $task])
+        ->with("success", "đã tạo thành công");
+
+})->name("task.store");
+
+//cập nhật task
+Route::put("/tasks/{task}", function(Task $task, TaskRequest $request) {
+    $task->update($request->validated());
+
+    return redirect()->route("task.show", ["task" => $task])
+        ->with("success", "đã sửa thành công");
+
+})->name("task.update");
+
+Route::delete("/tasks/{task}", function(Task $task) {
+    $task->delete();
+
+    return redirect()->route("task.index", ["task" => $task])->with("success", "đã xoá task thành công!");
+})->name("task.destroy");
+
+
+Route::put("/task/{task}/toggle-complete", function(Task $task) {
+
+    $task->toggleComplete();
+    return redirect()->back()->with("success", "đã cập nhật!!!");
+})->name("task.toggle-complete");
+
+
+//HANDLE 404
 Route::fallback(function () {
     return "where r u??";
 });
