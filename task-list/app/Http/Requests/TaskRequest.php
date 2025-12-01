@@ -27,4 +27,14 @@ class TaskRequest extends FormRequest
             "long_description" => "required"
         ];
     }
+
+    public function messages(): array
+    {
+        return [
+            'title.required' => 'đừng bỏ trống!',
+            'title.max' => 'tối đa 255 ký tự',
+            'description.required' => 'đừng bỏ trống!',
+            'long_description.required' => 'đừng bỏ trống!'
+        ];
+    }
 }
