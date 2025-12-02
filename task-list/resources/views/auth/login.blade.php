@@ -1,12 +1,11 @@
 @extends('layouts.app')
 
-@section('title', 'Đăng nhập hệ thống')
 
 @section('content')
-    <div class="max-w-md mx-auto mt-10">
+    <div class="min-h-screen flex items-center justify-center px-4">
 
         {{-- Card chứa Form --}}
-        <div class="bg-white p-8 rounded-lg border border-slate-200 shadow-md">
+        <div class="w-full max-w-lg bg-white p-8 rounded-lg border border-slate-200 shadow-md">
 
             <h1 class="text-2xl font-bold text-center text-slate-800 mb-6">Đăng Nhập</h1>
 

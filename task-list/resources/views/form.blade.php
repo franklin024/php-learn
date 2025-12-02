@@ -64,7 +64,7 @@
 
 @section('content')
     {{-- CONTAINER: Giới hạn chiều rộng và căn giữa --}}
-    <div class="max-w-2xl mx-auto mt-6">
+    <div class="max-w-2xl mx-auto mt-6 p-4">
 
         {{-- NÚT BACK --}}
         <div class="mb-6">

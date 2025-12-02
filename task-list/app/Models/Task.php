@@ -13,10 +13,17 @@ class Task extends Model
     protected $fillable = [
         "title",
         "description",
-        "long_description"
+        "long_description",
+        "user_id"
     ];
 
-    public function toggleComplete() {
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function toggleComplete()
+    {
         $this->completed = !$this->completed;
         $this->save();
     }

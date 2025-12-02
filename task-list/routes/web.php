@@ -2,103 +2,145 @@
 
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
-use Symfony\Component\HttpFoundation\Response;
 use Illuminate\Http\Request;
 use App\Models\Task;
 use App\Models\User;
 use App\Http\Requests\TaskRequest;
 use App\Http\Requests\UserRequest;
 use App\Http\Requests\LoginRequest;
+use Illuminate\Foundation\Auth\EmailVerificationRequest;
+use Illuminate\Auth\Events\Registered;
 
-//GET routes
-Route::get("/", function () {
-    if (Auth::check()) {
+
+Route::middleware('guest')->group(function () {
+    // Đăng ký
+    Route::view('/register', 'auth.register')->name('register');
+
+    Route::post("/register", function (UserRequest $request) {
+        $user = User::create($request->validated());
+        event(new Registered($user));
+
+        Auth::login($user);
+        $request->session()->regenerate(); // Fix bảo mật session
         return redirect()->route("task.index");
-    } else {
-        return redirect()->route("login");
-    }
+    })->name("register.store");
+
+    // Đăng nhập
+    Route::view('/login', 'auth.login')->name('login');
+
+    Route::post('/login', function (LoginRequest $request) {
+        $credentials = $request->validated();
+        if (Auth::attempt($credentials)) {
+            $request->session()->regenerate();
+            return redirect()->route('task.index')->with('success', 'Đăng nhập thành công!');
+        }
+        return back()->withErrors(['email' => 'Thông tin không chính xác.'])->onlyInput('email');
+    })->name('login.store');
 });
 
-Route::get("/tasks", function () {
-    return view("index", [
-        "tasks" => Task::latest()->paginate(7),
-    ]);
-})->name("task.index");
+/*
+|--------------------------------------------------------------------------
+| 2. NHÓM AUTH (Phải đăng nhập mới được vào)
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['auth', 'verified'])->group(function () {
 
-Route::view("/tasks/create", "create")
-    ->name("task.create");
+    // Đăng xuất
+    Route::post('/logout', function (Request $request) {
+        Auth::logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+        return redirect()->route('login')->with('success', 'Đã đăng xuất!');
+    })->name('logout');
 
-Route::get("/tasks/{task}/edit", function (Task $task) {
-    return view("edit", ["task" => $task]);
-})->name("task.edit");
+    // Trang chủ: Điều hướng
+    Route::get("/", function () {
+        return redirect()->route("task.index");
+    });
 
-//hiển thị task
-Route::get("/tasks/{task}", function (Task $task) {
-    return view(
-        "show",
-        ["task" => $task]
-    );
-})->name("task.show");
+    // 1. Danh sách (FIX LỖI 1: Chỉ lấy task của user hiện tại)
+    Route::get("/tasks", function (Request $request) {
+        return view("index", [
+            // CŨ (SAI): Task::latest()... -> Lấy hết của mọi người
+            // MỚI (ĐÚNG): $request->user()->tasks()... -> Chỉ lấy của mình
+            "tasks" => $request->user()->tasks()->latest()->paginate(7),
+        ]);
+    })->name("task.index");
+
+    // 2. Form tạo mới
+    Route::view("/tasks/create", "create")->name("task.create");
+
+    // 3. Form sửa (FIX LỖI 2: Chặn xem trộm)
+    Route::get("/tasks/{task}/edit", function (Task $task) {
+        // Kiểm tra: Nếu ID chủ task KHÁC ID người đang login -> Chặn
+        if ($task->user_id !== Auth::id()) abort(403);
+
+        return view("edit", ["task" => $task]);
+    })->name("task.edit");
+
+    // 4. Xem chi tiết (FIX LỖI 2)
+    Route::get("/tasks/{task}", function (Task $task) {
+        if ($task->user_id !== Auth::id()) abort(403);
+
+        return view("show", ["task" => $task]);
+    })->name("task.show");
+
+    // 5. Lưu mới (Đoạn này bạn viết ĐÚNG rồi)
+    Route::post("/tasks", function (TaskRequest $request) {
+        $task = $request->user()->tasks()->create($request->validated());
+
+        return redirect()->route("task.show", ["task" => $task])
+            ->with("success", "Đã tạo thành công");
+    })->name("task.store");
+
+    // 6. Cập nhật (FIX LỖI 2)
+    Route::put("/tasks/{task}", function (Task $task, TaskRequest $request) {
+        if ($task->user_id !== Auth::id()) abort(403);
+
+        $task->update($request->validated());
+
+        return redirect()->route("task.show", ["task" => $task])
+            ->with("success", "Đã sửa thành công");
+    })->name("task.update");
+
+    // 7. Xóa (FIX LỖI 2)
+    Route::delete("/tasks/{task}", function (Task $task) {
+        if ($task->user_id !== Auth::id()) abort(403);
+
+        $task->delete();
+
+        return redirect()->route("task.index")->with("success", "Đã xoá task thành công!");
+    })->name("task.destroy");
+
+    // 8. Toggle (FIX LỖI 2 & FIX LỖI 3 URL)
+    // Sửa URL từ /task/ thành /tasks/ cho đồng bộ
+    Route::put("/tasks/{task}/toggle-complete", function (Task $task) {
+        if ($task->user_id !== Auth::id()) abort(403);
+
+        $task->toggleComplete();
+        return redirect()->back()->with("success", "Đã cập nhật!!!");
+    })->name("task.toggle-complete");
+});
 
 
-//tạo task
-Route::post("/tasks", function (TaskRequest $request) {
-    $task = Task::create($request->validated());
+////////////
+Route::get('/email/verify', function () {
+    return view('auth.verify-email');
+})->middleware('auth')->name('verification.notice');
 
-    return redirect()->route("task.show", ["task" => $task])
-        ->with("success", "đã tạo thành công");
-})->name("task.store");
+// Xử lý link xác nhận trong email
+Route::get('/email/verify/{id}/{hash}', function (EmailVerificationRequest $request) {
+    $request->fulfill();
+    return redirect()->route('task.index')->with('success', 'Email đã xác thực!');
+})->middleware(['auth', 'signed'])->name('verification.verify');
 
-//cập nhật task
-Route::put("/tasks/{task}", function (Task $task, TaskRequest $request) {
-    $task->update($request->validated());
+// Gửi lại email
+Route::post('/email/verification-notification', function (Illuminate\Http\Request $request) {
+    $request->user()->sendEmailVerificationNotification();
+    return back()->with('success', 'Đã gửi lại link xác thực!');
+})->middleware(['auth', 'throttle:6,1'])->name('verification.send');
 
-    return redirect()->route("task.show", ["task" => $task])
-        ->with("success", "đã sửa thành công");
-})->name("task.update");
-
-Route::delete("/tasks/{task}", function (Task $task) {
-    $task->delete();
-
-    return redirect()->route("task.index", ["task" => $task])->with("success", "đã xoá task thành công!");
-})->name("task.destroy");
-
-
-Route::put("/task/{task}/toggle-complete", function (Task $task) {
-
-    $task->toggleComplete();
-    return redirect()->back()->with("success", "đã cập nhật!!!");
-})->name("task.toggle-complete");
-
-Route::view('/register', 'auth.register')->name('register');
-Route::post("/register", function (UserRequest $request) {
-    $user = User::create($request->validated());
-
-    Auth::login($user);
-
-    $request->session()->regenerate();
-
-    return redirect()->route("task.index");
-})->name("register.store");
-
-
-Route::view('/login', 'auth.login')->name('login');
-Route::post('/login', function (LoginRequest $request) {
-    $credentials = $request->validated();
-
-    if (Auth::attempt($credentials)) {
-        $request->session()->regenerate();
-
-        return redirect()->route('task.index')
-            ->with('success', 'Đăng nhập thành công!');
-    }
-
-    return back()->withErrors([
-        'email' => 'Thông tin đăng nhập không chính xác.',
-    ])->onlyInput('email');
-})->name('login.store');
-
-//HANDLE 404
+// Xử lý 404
 Route::fallback(function () {
-    return "where r u??";
+    return "Lạc đường rồi bạn ơi";
 });
