@@ -73,14 +73,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // 3. Form sửa (FIX LỖI 2: Chặn xem trộm)
     Route::get("/tasks/{task}/edit", function (Task $task) {
         // Kiểm tra: Nếu ID chủ task KHÁC ID người đang login -> Chặn
-        if ($task->user_id !== Auth::id()) abort(403);
+        if ((int)$task->user_id !== (int)Auth::id()) abort(403);
 
         return view("edit", ["task" => $task]);
     })->name("task.edit");
 
     // 4. Xem chi tiết (FIX LỖI 2)
     Route::get("/tasks/{task}", function (Task $task) {
-        if ($task->user_id !== Auth::id()) abort(403);
+        if ((int)$task->user_id !== (int)Auth::id()) abort(403);
 
         return view("show", ["task" => $task]);
     })->name("task.show");
@@ -95,7 +95,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // 6. Cập nhật (FIX LỖI 2)
     Route::put("/tasks/{task}", function (Task $task, TaskRequest $request) {
-        if ($task->user_id !== Auth::id()) abort(403);
+        if ((int)$task->user_id !== (int)Auth::id()) abort(403);
 
         $task->update($request->validated());
 
@@ -105,7 +105,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // 7. Xóa (FIX LỖI 2)
     Route::delete("/tasks/{task}", function (Task $task) {
-        if ($task->user_id !== Auth::id()) abort(403);
+        if ((int)$task->user_id !== (int)Auth::id()) abort(403);
 
         $task->delete();
 
@@ -115,7 +115,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // 8. Toggle (FIX LỖI 2 & FIX LỖI 3 URL)
     // Sửa URL từ /task/ thành /tasks/ cho đồng bộ
     Route::put("/tasks/{task}/toggle-complete", function (Task $task) {
-        if ($task->user_id !== Auth::id()) abort(403);
+        if ((int)$task->user_id !== (int)Auth::id()) abort(403);
 
         $task->toggleComplete();
         return redirect()->back()->with("success", "Đã cập nhật!!!");
